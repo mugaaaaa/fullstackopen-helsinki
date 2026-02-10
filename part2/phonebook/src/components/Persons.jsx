@@ -1,8 +1,13 @@
-const Persons = ({ persons = [] }) => {
+const Persons = ({ persons = [], handleDelete }) => {
   return (
     <ul>
-      {persons.map((person, index) =>
-        <li key={index}>{person.name} {person.number}</li>
+      {persons.map((person) =>
+        <li key={person.id}>
+          {person.name} {person.number}
+          <button
+            onClick={() => handleDelete(person.id)}
+          >delete</button>
+        </li>
       )}
     </ul>
   )
