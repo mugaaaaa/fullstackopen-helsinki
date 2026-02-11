@@ -18,6 +18,7 @@ morgan.token('body', (request) => {
 app.use(cors())
 app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
+app.use(express.static('dist'))
 
 app.get('/info', (request, response) => {
     const date = new Date()
