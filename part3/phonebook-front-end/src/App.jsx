@@ -15,6 +15,14 @@ const App = () => {
   const [notificationMessage, setNotificationMessage] = useState(null)
   const [notificationType, setNotificationType] = useState('ok')
 
+  const notify = (message, type = 'ok') => {
+    setNotificationMessage(message)
+    setNotificationType(type)
+    setTimeout(() => {
+      setNotificationMessage(null)
+    }, 5000)
+  }
+
   useEffect(() => {
     PhonebookService
       .getAll()
@@ -45,13 +53,15 @@ const App = () => {
         .update(persons.find(p => p.name === newName).id, newPerson)
         .then(returnedPerson => {
           setPersons(persons.map(p => p.id === returnedPerson.id ? returnedPerson : p))
+          notify(`Updated ${newName}`)
         })
         .catch(err => {
-          setNotificationMessage(`Information of ${newName} has already been removed from server`)
-          setNotificationType('error')
-          setTimeout(() => {
-            setNotificationMessage(null)
-          }, 5000)
+          const message = err.response?.data?.error
+          if (message) {
+            notify(message, 'error')
+            return
+          }
+          notify(`Information of ${newName} has already been removed from server`, 'error')
           setPersons(persons.filter(p => p.name !== newName))
         })
 
@@ -69,24 +79,33 @@ const App = () => {
         setPersons(persons.concat(returnedPerson))
         setNewName('')
         setNewNumber('')
+        notify(`Added ${newName}`)
+      })
+      .catch(err => {
+        const message = err.response?.data?.error ?? 'Failed to add person'
+        notify(message, 'error')
       })
 
-    setNotificationMessage(`Added ${newName}`)
-    setNotificationType('ok')
-    setTimeout(() => {
-      setNotificationMessage(null)
-    }, 5000)
   }
 
   const handleDelete = (id) => {
-    if (!window.confirm(`Delete ${persons.find(p => p.id === id).name} ?`)) {
+    const person = persons.find(p => p.id === id)
+    const personName = person?.name ?? 'this person'
+
+    if (!window.confirm(`Delete ${personName} ?`)) {
       return
     }
 
     PhonebookService
       .remove(id)
       .then(() => {
-        setPersons(persons.filter(p => p.id !== id))
+        setPersons(persons.filter(p => p.id !== id))  // Update local date instead of call getAll() again
+        notify(`Deleted ${personName}`)
+      })
+      .catch(err => {
+        // 2 '?'s to return undefined safely, '??' to use default String if the left side is null or undefined
+        const message = err.response?.data?.error ?? 'Failed to delete person'
+        notify(message, 'error')
       })
   }
 

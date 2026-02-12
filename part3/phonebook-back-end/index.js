@@ -3,16 +3,16 @@
 // import data from './data.json' assert { type: 'json' }  // need assert from Node.js v21+
 
 const express = require('express')
-const data = require('./data.json')
 const morgan = require('morgan')
 const app = express()
 const cors = require('cors')
+const Person = require('./models/person.js')
 
 morgan.token('body', (request) => {
-    if (request.method === 'POST') {
-        return JSON.stringify(request.body) // for POST requests, return the body in JSON format
-    }
-    return ''   // for other methods, return empty string
+  if (request.method === 'POST') {
+    return JSON.stringify(request.body) // for POST requests, return the body in JSON format
+  }
+  return ''   // for other methods, return empty string
 })
 
 app.use(cors())
@@ -21,78 +21,86 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms :b
 app.use(express.static('dist'))
 
 app.get('/info', (request, response) => {
-    const date = new Date()
-    const info = `Phonebook has info for ${data.length} people <br> ${date}`
-    response.send(info)
+  Person.find({})
+    .then(persons => {
+      const data = new Date()
+      const info = `Phonebook has info for ${persons.length} people <br> ${data}`
+      response.send(info)
+    })
 })
 
 app.get('/api/persons', (request, response) => {
-    response.json(data)
+  Person.find({})
+    .then(persons => {
+      response.json(persons)
+    })
 })
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = request.params.id    // keep it as string because the id in data.json is string
-    const person = data.find(p => p.id == id)  
-
-    if (person) {
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id)
+    .then(person => {
+      if (person) {
         response.json(person)
-    } else {
+      } else {
         response.status(404).end()
-    }
+      }
+    })
+    .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-
-    if (!data.find(p => p.id === id)) {
-        return response.status(404).end()
-    } else {
-        data.persons = data.persons.filter(p => p.id !== id)    // this didn't realy change the data.json file
-        response.status(204).end()
-    }
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndDelete(request.params.id)
+    .then(() => {
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
-app.post('/api/persons', (request, response) => {
-    const body = request.body
+app.post('/api/persons', (request, response, next) => {
+  const body = request.body
 
-    if (!body.name) {
-        return response.status(400).json({
-            error: 'name is missing'
-        })
-    }
+  const person = new Person({
+    name: body.name,
+    number: body.number
+  })
 
-    if (!body.number) {
-        return response.status(400).json({
-            error: 'number is missing'
-        })
-    }
-
-    if (data.find(p => p.name === body.name)) {
-        if (window.confirm(`${body.name} is already added to phonebook, replace the old number with a new one?`)) {
-            const person = data.find(p => p.name === body.name)
-            person.number = body.number
-            return response.json(person)
-        } else {
-            return response.status(400).json({
-                error: 'name must be unique'
-            })
-        }
-    }
-
-    const id = Math.floor(Math.random() * 1000000)    
-
-    const person = {
-        id: id,
-        name: body.name,
-        number: body.number
-    }
-
-    data.push(person)   // this didn't realy change the data.json file
-    response.json(person)
+  person.save()
+    .then(savedPerson => {
+      response.json(savedPerson)
+    })
+    .catch(error => next(error))
 })
+
+app.put('/api/persons/:id', (request, response, next) => {
+  const { name, number } = request.body
+
+  Person.findByIdAndUpdate(
+    request.params.id,
+    { name, number },
+    { new: true, runValidators: true, context: 'query' }  // { new: true } to let callback function return updated data
+  )
+    .then(updatedPerson => {
+      response.json(updatedPerson)
+    })
+    .catch(error => next(error))
+})
+
+// --- Error Handle --- 
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformed id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
+  } 
+  
+  next(error)
+}
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`)
+  console.log(`Server running on port ${PORT}`)
 })
-
